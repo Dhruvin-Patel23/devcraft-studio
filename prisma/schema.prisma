@@ -1,0 +1,430 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Authentication ─────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          UserRole  @default(ADMIN)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+enum UserRole {
+  ADMIN
+  EDITOR
+}
+
+// ─── Team Members ───────────────────────────────────────────────────────────
+
+model TeamMember {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  role        String
+  bio         String   @db.Text
+  shortBio    String?
+  image       String?
+  email       String?
+  phone       String?
+  github      String?
+  linkedin    String?
+  twitter     String?
+  website     String?
+  skills      String[] // Array of skill names
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  projects    ProjectTeamMember[]
+  blogPosts   BlogPost[]
+
+  @@map("team_members")
+}
+
+// ─── Projects ───────────────────────────────────────────────────────────────
+
+model Project {
+  id              String   @id @default(cuid())
+  title           String
+  slug            String   @unique
+  description     String   @db.Text
+  shortDescription String?
+  category        ProjectCategory
+  status          ProjectStatus @default(DRAFT)
+  isFeatured      Boolean  @default(false)
+  thumbnail       String?
+  liveUrl         String?
+  githubUrl       String?
+  
+  // Case study content
+  problem         String?  @db.Text
+  solution        String?  @db.Text
+  features        String[] // Array of feature descriptions
+  architecture    String?  @db.Text
+  implementation  String?  @db.Text
+  challenges      String?  @db.Text
+  results         String?  @db.Text
+  userFlow        String?  @db.Text
+
+  // SEO
+  metaTitle       String?
+  metaDescription String?
+
+  order           Int      @default(0)
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  technologies    ProjectTechnology[]
+  images          ProjectImage[]
+  teamMembers     ProjectTeamMember[]
+
+  @@index([category])
+  @@index([status])
+  @@index([isFeatured])
+  @@map("projects")
+}
+
+model ProjectImage {
+  id        String @id @default(cuid())
+  projectId String
+  url       String
+  alt       String?
+  caption   String?
+  order     Int    @default(0)
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_images")
+}
+
+model ProjectTeamMember {
+  id           String @id @default(cuid())
+  projectId    String
+  teamMemberId String
+  role         String? // Role on this specific project
+
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  teamMember   TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, teamMemberId])
+  @@map("project_team_members")
+}
+
+enum ProjectCategory {
+  WEB_APP
+  SAAS
+  ECOMMERCE
+  API
+  MOBILE
+  AI
+  OTHER
+}
+
+enum ProjectStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// ─── Technologies ───────────────────────────────────────────────────────────
+
+model Technology {
+  id       String @id @default(cuid())
+  name     String @unique
+  slug     String @unique
+  icon     String? // Icon identifier
+  category TechCategory @default(OTHER)
+
+  projects ProjectTechnology[]
+
+  @@map("technologies")
+}
+
+model ProjectTechnology {
+  id           String @id @default(cuid())
+  projectId    String
+  technologyId String
+
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  technology   Technology @relation(fields: [technologyId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, technologyId])
+  @@map("project_technologies")
+}
+
+enum TechCategory {
+  FRONTEND
+  BACKEND
+  DATABASE
+  DEVOPS
+  DESIGN
+  MOBILE
+  AI
+  OTHER
+}
+
+// ─── Services ───────────────────────────────────────────────────────────────
+
+model Service {
+  id           String   @id @default(cuid())
+  title        String
+  slug         String   @unique
+  description  String   @db.Text
+  shortDescription String?
+  icon         String?  // Lucide icon name
+  features     String[] // Array of feature descriptions
+  technologies String[] // Array of technology names
+  order        Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("services")
+}
+
+// ─── Blog ───────────────────────────────────────────────────────────────────
+
+model BlogPost {
+  id              String     @id @default(cuid())
+  title           String
+  slug            String     @unique
+  excerpt         String?    @db.Text
+  content         String     @db.Text
+  coverImage      String?
+  category        BlogCategory @default(ENGINEERING)
+  status          PostStatus @default(DRAFT)
+  readingTime     Int?       // in minutes
+  isFeatured      Boolean    @default(false)
+
+  // SEO
+  metaTitle       String?
+  metaDescription String?
+
+  authorId        String
+  author          TeamMember @relation(fields: [authorId], references: [id])
+
+  tags            BlogTag[]
+
+  publishedAt     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([category])
+  @@index([status])
+  @@map("blog_posts")
+}
+
+model BlogTag {
+  id     String     @id @default(cuid())
+  name   String
+  slug   String     @unique
+  posts  BlogPost[]
+
+  @@map("blog_tags")
+}
+
+enum BlogCategory {
+  WEB_DEVELOPMENT
+  SAAS
+  AI
+  ENGINEERING
+  TECHNOLOGY
+  CASE_STUDY
+  TUTORIAL
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// ─── Case Studies ───────────────────────────────────────────────────────────
+
+model CaseStudy {
+  id              String   @id @default(cuid())
+  title           String
+  slug            String   @unique
+  client          String?
+  industry        String?
+  duration        String?
+  excerpt         String?  @db.Text
+  coverImage      String?
+  
+  problem         String   @db.Text
+  solution        String   @db.Text
+  process         String?  @db.Text
+  challenges      String?  @db.Text
+  results         String?  @db.Text
+  technologies    String[]
+  screenshots     String[] // Array of image URLs
+
+  // SEO
+  metaTitle       String?
+  metaDescription String?
+
+  status          PostStatus @default(DRAFT)
+  isFeatured      Boolean    @default(false)
+  order           Int        @default(0)
+  publishedAt     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@map("case_studies")
+}
+
+// ─── Testimonials ───────────────────────────────────────────────────────────
+
+model Testimonial {
+  id        String   @id @default(cuid())
+  name      String
+  role      String?
+  company   String?
+  content   String   @db.Text
+  image     String?
+  rating    Int?     @default(5)
+  isActive  Boolean  @default(true)
+  isDemoData Boolean @default(true) // Clearly marked as demo
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("testimonials")
+}
+
+// ─── Contact Inquiries ──────────────────────────────────────────────────────
+
+model ContactInquiry {
+  id              String        @id @default(cuid())
+  name            String
+  email           String
+  company         String?
+  phone           String?
+  projectType     ProjectType
+  budget          BudgetRange?
+  timeline        String?
+  description     String        @db.Text
+  referenceUrl    String?
+  status          InquiryStatus @default(NEW)
+  notes           String?       @db.Text
+  respondedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("contact_inquiries")
+}
+
+enum ProjectType {
+  WEBSITE
+  WEB_APP
+  SAAS
+  ECOMMERCE
+  API
+  AI
+  OTHER
+}
+
+enum BudgetRange {
+  UNDER_25K      // Under ₹25K
+  FROM_25K_TO_50K // ₹25K–₹50K
+  FROM_50K_TO_1L  // ₹50K–₹1L
+  ABOVE_1L       // ₹1L+
+  NOT_SURE
+}
+
+enum InquiryStatus {
+  NEW
+  CONTACTED
+  IN_DISCUSSION
+  WON
+  LOST
+  ARCHIVED
+}
+
+// ─── Site Settings ──────────────────────────────────────────────────────────
+
+model SiteSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("site_settings")
+}
+
+// ─── FAQ ────────────────────────────────────────────────────────────────────
+
+model FAQ {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String   @db.Text
+  category  String?
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("faqs")
+}
